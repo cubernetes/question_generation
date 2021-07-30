@@ -58,10 +58,11 @@ class QGPipeline:
             qg_examples = self._prepare_inputs_for_qg_from_answers_prepend(inputs, answers)
         else:
             qg_examples = self._prepare_inputs_for_qg_from_answers_hl(sents, answers)
-        
+
+
         qg_inputs = [example['source_text'] for example in qg_examples]
         questions = self._generate_questions(qg_inputs)
-        output = [{'answer': example['answer'], 'question': que} for example, que in zip(qg_examples, questions)]
+        output = [{'question': que, 'answer': example['answer']} for example, que in zip(qg_examples, questions)]
         return output
     
     def _generate_questions(self, inputs):
@@ -133,24 +134,29 @@ class QGPipeline:
         inputs = []
         for i, answer in enumerate(answers):
             if len(answer) == 0: continue
-            for answer_text in answer:
-                sent = sents[i]
-                sents_copy = sents[:]
-                
-                answer_text = answer_text.strip()
-                
-                ans_start_idx = sent.index(answer_text)
-                
-                sent = f"{sent[:ans_start_idx]} <hl> {answer_text} <hl> {sent[ans_start_idx + len(answer_text): ]}"
-                sents_copy[i] = sent
-                
-                source_text = " ".join(sents_copy)
-                source_text = f"generate question: {source_text}" 
-                if self.model_type == "t5":
-                    source_text = source_text + " </s>"
-                
-                inputs.append({"answer": answer_text, "source_text": source_text})
-        
+            def inner_loop():
+                for answer_text in answer:
+                    sent = sents[i]
+                    sents_copy = sents[:]
+                    
+                    answer_text = answer_text.strip()
+                    
+                    try:
+                        ans_start_idx = sent.index(answer_text)
+                    except Exception as e:
+                        print(e)
+                        return
+                    
+                    sent = f"{sent[:ans_start_idx]} <hl> {answer_text} <hl> {sent[ans_start_idx + len(answer_text): ]}"
+                    sents_copy[i] = sent
+                    
+                    source_text = " ".join(sents_copy)
+                    source_text = f"generate question: {source_text}" 
+                    if self.model_type == "t5":
+                        source_text = source_text + " </s>"
+                    
+                    inputs.append({"answer": answer_text, "source_text": source_text})
+            inner_loop()
         return inputs
     
     def _prepare_inputs_for_qg_from_answers_prepend(self, context, answers):
@@ -306,14 +312,14 @@ SUPPORTED_TASKS = {
 }
 
 def pipeline(
-    task: str,
-    model: Optional = None,
-    tokenizer: Optional[Union[str, PreTrainedTokenizer]] = None,
-    qg_format: Optional[str] = "highlight",
-    ans_model: Optional = None,
-    ans_tokenizer: Optional[Union[str, PreTrainedTokenizer]] = None,
-    use_cuda: Optional[bool] = True,
-    **kwargs,
+        task: str,
+        model: Optional = None,
+        tokenizer: Optional[Union[str, PreTrainedTokenizer]] = None,
+        qg_format: Optional[str] = "highlight",
+        ans_model: Optional = None,
+        ans_tokenizer: Optional[Union[str, PreTrainedTokenizer]] = None,
+        use_cuda: Optional[bool] = True,
+        **kwargs,
 ):
     # Retrieve the task
     if task not in SUPPORTED_TASKS:
